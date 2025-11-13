@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, send_from_directory
+from flask import Flask, render_template, request, send_from_directory, jsonify
 from flask_socketio import SocketIO, emit
 import rclpy
 from rclpy.node import Node
@@ -6,7 +6,18 @@ import threading
 import time
 from sensor_msgs.msg import Imu, BatteryState, LaserScan
 from geometry_msgs.msg import Twist
-from nav_msgs.msg import OccupancyGrid  # 添加地图消息类型
+from nav_msgs.msg import OccupancyGrid
+
+# 尝试导入导航相关的模块，如果失败则标记为不可用
+try:
+    from rclpy.action import ActionClient
+    from nav2_msgs.action import NavigateToPose
+    from geometry_msgs.msg import PoseStamped
+    from action_msgs.msg import GoalStatus
+    NAVIGATION_AVAILABLE = True
+except ImportError as e:
+    print(f"导航模块导入失败: {e}")
+    NAVIGATION_AVAILABLE = False
 
 # 创建Flask应用
 app = Flask(__name__)
@@ -62,6 +73,13 @@ class WebNode(Node):
             10
         )
         self.get_logger().info("地图数据处理功能已初始化")
+
+        # 如果导航模块可用，则初始化导航动作客户端
+        if NAVIGATION_AVAILABLE:
+            self.nav_client = ActionClient(self, NavigateToPose, 'navigate_to_pose')
+            self.get_logger().info("导航动作客户端已初始化")
+        else:
+            self.get_logger().warning("导航模块不可用，跳过导航功能初始化")
 
     # 电池状态订阅回调函数
     def battery_callback(self, msg):
@@ -192,6 +210,79 @@ class WebNode(Node):
         self.cmd_vel_publisher.publish(msg)
         self.get_logger().info(f'发布速度命令: linear={linear_x}, angular={angular_z}')
 
+    # 导航到指定位置
+    def send_navigation_goal(self, x, y):
+        if not NAVIGATION_AVAILABLE:
+            self.get_logger().error('导航模块不可用')
+            socketio.emit('navigation_status', {'status': 'error', 'message': '导航模块不可用'})
+            return False
+            
+        # 等待动作服务器可用
+        if not self.nav_client.wait_for_server(timeout_sec=5.0):
+            self.get_logger().error('导航服务器未响应')
+            socketio.emit('navigation_status', {'status': 'error', 'message': '导航服务器未响应'})
+            return False
+        
+        # 创建目标消息
+        goal_msg = NavigateToPose.Goal()
+        pose = PoseStamped()
+        pose.header.frame_id = 'map'
+        pose.header.stamp = self.get_clock().now().to_msg()
+        pose.pose.position.x = float(x)
+        pose.pose.position.y = float(y)
+        pose.pose.orientation.w = 1.0
+        
+        goal_msg.pose = pose
+        
+        # 发送目标并设置反馈回调
+        self.send_goal_future = self.nav_client.send_goal_async(
+            goal_msg,
+            feedback_callback=self.navigation_feedback_callback
+        )
+        self.send_goal_future.add_done_callback(self.navigation_goal_response_callback)
+        
+        return True
+
+    # 导航目标响应回调
+    def navigation_goal_response_callback(self, future):
+        goal_handle = future.result()
+        if not goal_handle.accepted:
+            self.get_logger().info('导航目标被拒绝')
+            socketio.emit('navigation_status', {'status': 'rejected', 'message': '导航目标被拒绝'})
+            return
+        
+        self.get_logger().info('导航目标已接受')
+        socketio.emit('navigation_status', {'status': 'accepted', 'message': '导航目标已接受'})
+        
+        # 获取结果
+        self.get_result_future = goal_handle.get_result_async()
+        self.get_result_future.add_done_callback(self.navigation_result_callback)
+
+    # 导航结果回调
+    def navigation_result_callback(self, future):
+        result = future.result().result
+        status = future.result().status
+        
+        if status == GoalStatus.STATUS_SUCCEEDED:
+            self.get_logger().info('导航成功完成')
+            socketio.emit('navigation_result', {'status': 'completed', 'message': '导航成功完成'})
+        else:
+            self.get_logger().info(f'导航失败，状态码: {status}')
+            socketio.emit('navigation_result', {'status': 'failed', 'message': f'导航失败，状态码: {status}'})
+
+    # 导航反馈回调
+    def navigation_feedback_callback(self, feedback_msg):
+        feedback = feedback_msg.feedback
+        # 发送导航反馈到Web客户端
+        feedback_data = {
+            'current_pose': {
+                'x': feedback.current_pose.pose.position.x,
+                'y': feedback.current_pose.pose.position.y
+            }
+        }
+        socketio.emit('navigation_feedback', feedback_data)
+        self.get_logger().info(f'当前位置: ({feedback.current_pose.pose.position.x:.2f}, {feedback.current_pose.pose.position.y:.2f})')
+
 # 全局ROS 2节点
 web_node = None
 
@@ -259,8 +350,10 @@ def handle_set_navigation_goal(data):
     """处理设置导航目标事件"""
     print('设置导航目标:', data)
     if web_node:
-        # 这里应该发送命令给ROS节点设置导航目标
-        emit('navigation_goal_set', data)
+        # 发送导航目标到ROS 2导航栈
+        success = web_node.send_navigation_goal(data['x'], data['y'])
+        if success:
+            emit('navigation_goal_set', data)
 
 # 主路由
 @app.route('/')
@@ -288,6 +381,28 @@ def map_debug():
 @app.route('/test_websocket')
 def test_websocket():
     return send_from_directory('.', 'test_websocket.html')
+
+# 添加导航API端点
+@app.route('/api/navigate', methods=['POST'])
+def api_navigate():
+    """REST API导航接口"""
+    data = request.get_json()
+    
+    if not data or 'x' not in data or 'y' not in data:
+        return jsonify({'error': '缺少x或y参数'}), 400
+    
+    x = data['x']
+    y = data['y']
+    
+    # 发送导航目标
+    if web_node:
+        success = web_node.send_navigation_goal(x, y)
+        if success:
+            return jsonify({'status': 'accepted', 'message': '导航目标已接受'})
+        else:
+            return jsonify({'status': 'rejected', 'message': '导航服务器未响应'}), 500
+    else:
+        return jsonify({'status': 'error', 'message': 'ROS节点未初始化'}), 500
 
 if __name__ == '__main__':
     # 初始化ROS 2
