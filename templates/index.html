@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>机器人小车物联网云控系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.2/dist/echarts.min.js"></script>
+    <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #3a6ea5;
+            --secondary-color: #004e98;
+            --accent-color: #ff6b6b;
+            --dark-color: #2c3e50;
+            --light-color: #ecf0f1;
+            --battery-high: #2ecc71; /* 高电量颜色（>50%） */
+            --battery-medium: #f39c12; /* 中电量颜色（20%-50%） */
+            --battery-low: #e74c3c; /* 低电量颜色（<20%） */
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+            color: #333;
+            padding-top: 20px;
+        }
+        
+        .navbar-brand {
+            font-weight: 700;
+            color: var(--primary-color) !important;
+        }
+        
+        .card {
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            border: none;
+            transition: transform 0.3s ease;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .card-header {
+            background-color: var(--primary-color);
+            color: white;
+            border-radius: 10px 10px 0 0 !important;
+            font-weight: 600;
+        }
+        
+        .main-container {
+            max-width: 1800px;
+            margin: 0 auto;
+        }
+        
+        .map-container {
+            height: 500px;
+            background-color: #2c3e50;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        
+        .status-indicator {
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        
+        .status-online {
+            background-color: #2ecc71;
+        }
+        
+        .status-offline {
+            background-color: #e74c3c;
+        }
+        
+        .status-connecting {
+            background-color: #f39c12;
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .control-btn {
+            width: 70px;
+            height: 70px;
+            font-size: 24px;
+            margin: 5px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .chart-container {
+            height: 250px;
+            width: 100%;
+        }
+        
+        .action-buttons {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+        
+        .connection-panel {
+            background-color: var(--light-color);
+            border-radius: 10px;
+            padding: 15px;
+        }
+        
+        .feature-badge {
+            background-color: var(--secondary-color);
+            color: white;
+            border-radius: 20px;
+            padding: 4px 10px;
+            font-size: 0.8rem;
+            margin-right: 5px;
+            margin-bottom: 5px;
+            display: inline-block;
+        }
+        
+        .feature-list {
+            margin-bottom: 20px;
+        }
+        
+        .page {
+            display: none;
+        }
+        
+        .page.active {
+            display: block;
+        }
+        
+        .nav-tabs .nav-link.active {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+        }
+        
+        .nav-tabs .nav-link {
+            color: var(--dark-color);
+            font-weight: 500;
+        }
+        
+        .control-pad {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            grid-template-rows: repeat(5, 1fr);
+            gap: 10px;
+            margin: 0 auto;
+            max-width: 400px;
+        }
+        
+        .control-pad-btn {
+            width: 100%;
+            height: 70px;
+            font-size: 24px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .btn-forward {
+            grid-column: 3;
+            grid-row: 1;
+        }
+        
+        .btn-backward {
+            grid-column: 3;
+            grid-row: 3;
+        }
+        
+        .btn-left {
+            grid-column: 2;
+            grid-row: 2;
+        }
+        
+        .btn-right {
+            grid-column: 4;
+            grid-row: 2;
+        }
+        
+        .btn-rotate-left {
+            grid-column: 1;
+            grid-row: 2;
+        }
+        
+        .btn-rotate-right {
+            grid-column: 5;
+            grid-row: 2;
+        }
+        
+        .btn-stop {
+            grid-column: 3;
+            grid-row: 2;
+            background-color: #e74c3c;
+            color: white;
+        }
+        
+        .speed-display {
+            font-size: 1.5rem;
+            font-weight: bold;
+            text-align: center;
+            margin: 10px 0;
+        }
+        
+        .control-section {
+            background-color: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .connection-status {
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+            text-align: center;
+            font-weight: bold;
+        }
+        
+        .connected {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .connecting {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        
+        .info-box {
+            padding: 10px;
+            margin: 10px 0;
+            background-color: #e9ecef;
+            border-radius: 4px;
+            border-left: 4px solid #6c757d;
+        }
+
+        /* IMU数据模块样式 */
+        #imu-data {
+            background-color: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        /* 电池状态模块样式 */
+        #battery-data {
+            padding: 15px 0;
+        }
+        
+        .battery-level {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 15px 0;
+        }
+        
+        .battery-outline {
+            width: 80px;
+            height: 40px;
+            border: 3px solid var(--dark-color);
+            border-radius: 5px;
+            position: relative;
+            margin-right: 15px;
+            display: flex;
+            align-items: flex-end;
+            padding: 3px;
+            box-sizing: border-box;
+        }
+        
+        .battery-outline::after {
+            content: '';
+            width: 10px;
+            height: 20px;
+            background-color: var(--dark-color);
+            position: absolute;
+            right: -13px;
+            top: 50%;
+            transform: translateY(-50%);
+            border-radius: 0 3px 3px 0;
+        }
+        
+        .battery-fill {
+            width: 100%;
+            background-color: var(--battery-high);
+            border-radius: 2px;
+            transition: height 0.3s ease, background-color 0.3s ease;
+        }
+        
+        #battery-percentage {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--dark-color);
+        }
+        
+        .data-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .data-row:last-child {
+            border-bottom: none;
+        }
+        
+        .label {
+            font-weight: 500;
+            color: var(--dark-color);
+        }
+        
+        .value {
+            color: var(--primary-color);
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid main-container">
+        <!-- 顶部导航 -->
+        <nav class="navbar navbar-expand-lg navbar-dark bg-dark rounded-3 mb-4">
+            <div class="container-fluid">
+                <a class="navbar-brand" href="#">
+                    <i class="bi bi-robot"></i> 机器人小车物联网云控系统
+                </a>
+                <div class="d-flex">
+                    <div class="connection-panel me-3">
+                        <span class="status-indicator status-connecting" id="status-indicator"></span>
+                        <span id="connection-status">连接中...</span>
+                        <span class="ms-2" id="ros-address">ws://192.168.1.100:9090</span>
+                    </div>
+                    <button class="btn btn-sm btn-outline-light me-2" id="connect-btn">
+                        <i class="bi bi-plug"></i> 连接
+                    </button>
+                    <button class="btn btn-sm btn-outline-light" data-bs-toggle="modal" data-bs-target="#settingsModal">
+                        <i class="bi bi-gear"></i> 设置
+                    </button>
+                </div>
+            </div>
+        </nav>
+
+        <!-- 页面导航 -->
+        <ul class="nav nav-tabs mb-4" id="myTab" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="control-tab" data-bs-toggle="tab" data-bs-target="#control" type="button" role="tab" aria-controls="control" aria-selected="true">
+                    <i class="bi bi-joystick"></i> 运动控制
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="navigation-tab" data-bs-toggle="tab" data-bs-target="#navigation" type="button" role="tab" aria-controls="navigation" aria-selected="false">
+                    <i class="bi bi-map"></i> 地图与导航
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="data-tab" data-bs-toggle="tab" data-bs-target="#data" type="button" role="tab" aria-controls="data" aria-selected="false">
+                    <i class="bi bi-graph-up"></i> 数据可视化
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="tasks-tab" data-bs-toggle="tab" data-bs-target="#tasks" type="button" role="tab" aria-controls="tasks" aria-selected="false">
+                    <i class="bi bi-list-task"></i> 任务管理
+                </button>
+            </li>
+        </ul>
+
+        <!-- 页面内容 -->
+        <div class="tab-content" id="myTabContent">
+            <!-- 运动控制页面 -->
+            <div class="tab-pane fade show active" id="control" role="tabpanel" aria-labelledby="control-tab">
+                <div class="row">
+                    <div class="col-md-8">
+                        <div class="control-section">
+                            <h4 class="mb-4"><i class="bi bi-joystick"></i> 运动控制面板</h4>
+                            
+                            <div class="control-pad">
+                                <button class="btn btn-primary control-pad-btn btn-forward" id="forward-btn">
+                                    <i class="bi bi-arrow-up"></i>
+                                </button>
+                                <button class="btn btn-primary control-pad-btn btn-backward" id="backward-btn">
+                                    <i class="bi bi-arrow-down"></i>
+                                </button>
+                                <button class="btn btn-primary control-pad-btn btn-left" id="left-btn">
+                                    <i class="bi bi-arrow-left"></i>
+                                </button>
+                                <button class="btn btn-primary control-pad-btn btn-right" id="right-btn">
+                                    <i class="bi bi-arrow-right"></i>
+                                </button>
+                                <button class="btn control-pad-btn btn-rotate-left" id="rotate-left-btn">
+                                    <i class="bi bi-arrow-counterclockwise"></i>
+                                </button>
+                                <button class="btn control-pad-btn btn-rotate-right" id="rotate-right-btn">
+                                    <i class="bi bi-arrow-clockwise"></i>
+                                </button>
+                                <button class="btn control-pad-btn btn-stop" id="stop-btn">
+                                    <i class="bi bi-stop-fill"></i>
+                                </button>
+                            </div>
+                            
+                            <div class="row mt-4">
+                                <div class="col-md-6">
+                                    <h5>线速度控制</h5>
+                                    <div class="speed-display">
+                                        线速度: <span id="linear-speed-value">0.5</span> m/s
+                                    </div>
+                                    <div class="d-flex">
+                                        <button class="btn btn-outline-danger me-2" id="linear-decrease">
+                                            <i class="bi bi-dash-lg"></i> 减速
+                                        </button>
+                                        <input type="range" class="form-range flex-grow-1" min="0" max="1" step="0.1" value="0.5" id="linear-speed">
+                                        <button class="btn btn-outline-success ms-2" id="linear-increase">
+                                            <i class="bi bi-plus-lg"></i> 加速
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <h5>角速度控制</h5>
+                                    <div class="speed-display">
+                                        角速度: <span id="angular-speed-value">0.5</span> rad/s
+                                    </div>
+                                    <div class="d-flex">
+                                        <button class="btn btn-outline-danger me-2" id="angular-decrease">
+                                            <i class="bi bi-dash-lg"></i> 减速
+                                        </button>
+                                        <input type="range" class="form-range flex-grow-1" min="0" max="1" step="0.1" value="0.5" id="angular-speed">
+                                        <button class="btn btn-outline-success ms-2" id="angular-increase">
+                                            <i class="bi bi-plus-lg"></i> 加速
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mt-4">
+                                <h5>当前运动状态</h5>
+                                <div class="card">
+                                    <div class="card-body">
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="d-flex justify-content-between mb-2">
+                                                    <span>线速度:</span>
+                                                    <span id="current-linear">0.00 m/s</span>
+                                                </div>
+                                                <div class="d-flex justify-content-between mb-2">
+                                                    <span>角速度:</span>
+                                                    <span id="current-angular">0.00 rad/s</span>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="d-flex justify-content-between mb-2">
+                                                    <span>运动方向:</span>
+                                                    <span id="current-direction">停止</span>
+                                                </div>
+                                                <div class="d-flex justify-content-between">
+                                                    <span>控制模式:</span>
+                                                    <span id="current-mode">手动</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <div class="card">
+                            <div class="card-header">
+                                <i class="bi bi-lightning-charge"></i> 快速指令
+                            </div>
+                            <div class="card-body">
+                                <div class="d-grid gap-2">
+                                    <button class="btn btn-outline-primary" id="move-forward-1m">
+                                        <i class="bi bi-signpost"></i> 前进1米
+                                    </button>
+                                    <button class="btn btn-outline-primary" id="move-backward-1m">
+                                        <i class="bi bi-signpost"></i> 后退1米
+                                    </button>
+                                    <button class="btn btn-outline-primary" id="rotate-90-left">
+                                        <i class="bi bi-arrow-counterclockwise"></i> 左转90度
+                                    </button>
+                                    <button class="btn btn-outline-primary" id="rotate-90-right">
+                                        <i class="bi bi-arrow-clockwise"></i> 右转90度
+                                    </button>
+                                    <button class="btn btn-outline-success" id="emergency-stop">
+                                        <i class="bi bi-exclamation-triangle"></i> 紧急停止
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <i class="bi bi-info-circle"></i> 控制说明
+                            </div>
+                            <div class="card-body">
+                                <ul class="list-group list-group-flush">
+                                    <li class="list-group-item">使用方向按钮控制小车移动方向</li>
+                                    <li class="list-group-item">旋转按钮控制小车原地旋转</li>
+                                    <li class="list-group-item">使用滑块或按钮调整速度</li>
+                                    <li class="list-group-item">中央停止按钮可立即停止小车</li>
+                                    <li class="list-group-item">快速指令可执行预设动作</li>
+                                </ul>
+                            </div>
+                        </div>
+                        
+                        <!-- 电池状态模块 -->
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <i class="bi bi-battery-half"></i> 电池状态
+                            </div>
+                            <div class="card-body">
+                                <div id="battery-data">
+                                    <div class="battery-level">
+                                        <div class="battery-outline">
+                                            <div class="battery-fill" id="battery-fill" style="height: 75%;"></div>
+                                        </div>
+                                        <span id="battery-percentage">75%</span>
+                                    </div>
+                                    <div class="data-row">
+                                        <span class="label">电压:</span>
+                                        <span id="battery-voltage" class="value">12.5V</span>
+                                    </div>
+                                    <div class="data-row">
+                                        <span class="label">状态:</span>
+                                        <span id="battery-status" class="value">放电中</span>
+                                    </div>
+                                </div>
+                                <div class="info-box mt-3">
+                                    <p>确保已启动ROS 2 Bridge服务器</p>
+                                    <p>ROS 2 Bridge命令: <code>ros2 launch rosbridge_server rosbridge_websocket_launch.xml</code></p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <i class="bi bi-robot"></i> 命令响应
+                            </div>
+                            <div class="card-body">
+                                <div id="commandResponse">等待命令响应...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 地图与导航页面 -->
+            <div class="tab-pane fade" id="navigation" role="tabpanel" aria-labelledby="navigation-tab">
+                <div class="row">
+                    <div class="col-md-8">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <span><i class="bi bi-map"></i> 实时地图与导航</span>
+                                <div>
+                                    <button class="btn btn-sm btn-outline-light me-1" id="start-mapping">
+                                        <i class="bi bi-record-circle"></i> 开始建图
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-light me-1" id="save-map">
+                                        <i class="bi bi-save"></i> 保存地图
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-light" id="clear-path">
+                                        <i class="bi bi-trash"></i> 清除路径
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="map-container position-relative" id="map" style="height: 500px;">
+                                    <canvas id="map-canvas" style="width: 100%; height: 100%;"></canvas>
+                                </div>
+                                <div class="mt-3">
+                                    <h6>设置导航目标点</h6>
+                                    <div class="d-flex">
+                                        <div class="me-2">
+                                            <label class="form-label">X坐标</label>
+                                            <input type="number" class="form-control" id="goal-x" value="2.5" step="0.1">
+                                        </div>
+                                        <div class="me-2">
+                                            <label class="form-label">Y坐标</label>
+                                            <input type="number" class="form-control" id="goal-y" value="3.2" step="0.1">
+                                        </div>
+                                        <div class="me-2">
+                                            <label class="form-label">朝向</label>
+                                            <input type="number" class="form-control" id="goal-theta" value="0.0" step="0.1">
+                                        </div>
+                                        <div class="align-self-end">
+                                            <button class="btn btn-primary" id="set-goal">
+                                                设置目标点
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card">
+                            <div class="card-header">
+                                <i class="bi bi-info-circle"></i> 地图信息
+                            </div>
+                            <div class="card-body">
+                                <div class="data-row">
+                                    <span class="label">地图尺寸:</span>
+                                    <span id="map-size" class="value">-- x --</span>
+                                </div>
+                                <div class="data-row">
+                                    <span class="label">分辨率:</span>
+                                    <span id="map-resolution" class="value">-- m/pixel</span>
+                                </div>
+                                <div class="data-row">
+                                    <span class="label">导航点数量:</span>
+                                    <span id="waypoint-count" class="value">0</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <i class="bi bi-mouse"></i> 操作说明
+                            </div>
+                            <div class="card-body">
+                                <ul class="list-group list-group-flush">
+                                    <li class="list-group-item">鼠标左键拖拽：移动地图</li>
+                                    <li class="list-group-item">鼠标滚轮：缩放地图</li>
+                                    <li class="list-group-item">鼠标右键：添加导航点</li>
+                                    <li class="list-group-item">双击导航点：编辑标签</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 数据可视化页面（含IMU数据） -->
+            <div class="tab-pane fade" id="data" role="tabpanel" aria-labelledby="data-tab">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div id="imu-data" class="card">
+                            <div class="card-header">
+                                <i class="bi bi-satellite-dish"></i> IMU传感器数据
+                            </div>
+                            <div class="card-body">
+                                <div class="data-row">
+                                    <span class="label">方向 X:</span>
+                                    <span id="imu-x" class="value">0.00</span>
+                                </div>
+                                <div class="data-row">
+                                    <span class="label">方向 Y:</span>
+                                    <span id="imu-y" class="value">0.00</span>
+                                </div>
+                                <div class="data-row">
+                                    <span class="label">方向 Z:</span>
+                                    <span id="imu-z" class="value">0.00</span>
+                                </div>
+                                <div class="data-row">
+                                    <span class="label">方向 W:</span>
+                                    <span id="imu-w" class="value">0.00</span>
+                                </div>
+                                <div class="data-row">
+                                    <span class="label">角速度 X:</span>
+                                    <span id="angular-x" class="value">0.00</span>
+                                </div>
+                                <div class="data-row">
+                                    <span class="label">角速度 Y:</span>
+                                    <span id="angular-y" class="value">0.00</span>
+                                </div>
+                                <div class="data-row">
+                                    <span class="label">角速度 Z:</span>
+                                    <span id="angular-z" class="value">0.00</span>
+                                </div>
+                                <div class="data-row">
+                                    <span class="label">线性加速度 X:</span>
+                                    <span id="linear-x" class="value">0.00</span>
+                                </div>
+                                <div class="data-row">
+                                    <span class="label">线性加速度 Y:</span>
+                                    <span id="linear-y" class="value">0.00</span>
+                                </div>
+                                <div class="data-row">
+                                    <span class="label">线性加速度 Z:</span>
+                                    <span id="linear-z" class="value">0.00</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <i class="bi bi-chart-line"></i> 传感器数据趋势
+                            </div>
+                            <div class="card-body">
+                                <div class="chart-container" id="sensor-chart"></div>
+                                <div class="info-box mt-3">
+                                    <p>提示：此处可添加IMU数据的实时趋势图</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                                <!-- 新增：激光雷达可视化卡片（放在这里！） -->
+                    <div class="col-md-12 mt-4">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <span><i class="bi bi-radar"></i> 激光雷达点云数据</span>
+                                <div class="controls">
+                                    <label class="form-check-label">
+                                        <input type="checkbox" class="form-check-input" id="show-beams" checked> 显示激光束
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="lidar-canvas" width="1200" height="600" class="border rounded"></canvas>
+                                <div class="status mt-3 d-flex justify-content-between">
+                                    <div>点数量: <span id="point-count" class="badge bg-primary">0</span></div>
+                                    <div>坐标系: <span id="frame-id" class="badge bg-secondary">unknown</span></div>
+                                    <div>更新时间: <span id="timestamp" class="badge bg-success">--:--:--</span></div>
+                                </div>
+                                <div class="info-box mt-3">
+                                    <p>激光雷达实时点云可视化（红色：近距离 < 1m，黄色：中距离 1-3m，蓝色：远距离 > 3m）</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>    
+                </div>
+            </div>
+            
+            <!-- 任务管理页面 -->
+            <div class="tab-pane fade" id="tasks" role="tabpanel" aria-labelledby="tasks-tab">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="bi bi-list-task"></i> 任务管理
+                    </div>
+                    <div class="card-body">
+                        <div class="info-box">
+                            <p>任务管理功能待实现</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 设置模态框 -->
+    <div class="modal fade" id="settingsModal" tabindex="-1" aria-labelledby="settingsModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="settingsModalLabel">系统设置</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="ros-bridge-url" class="form-label">ROS Bridge 地址</label>
+                        <input type="text" class="form-control" id="ros-bridge-url" value="ws://192.168.1.100:9090">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">保存设置</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='js/lidar_visualizer.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/map_navigation.js') }}"></script>
+    <script>
+        // 测试JavaScript是否执行
+        console.log("主页面JavaScript已执行");
+        
+        // 检查LidarCanvas是否存在
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log("DOM已加载完成");
+            const canvas = document.getElementById('lidar-canvas');
+            if (canvas) {
+                console.log("找到lidar-canvas元素");
+                console.log("Canvas尺寸:", canvas.width, "x", canvas.height);
+            } else {
+                console.log("未找到lidar-canvas元素");
+            }
+        });
+        
+        // 初始化SocketIO连接
+</script>

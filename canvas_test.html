@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Canvas测试页面</title>
+</head>
+<body>
+    <h1>Canvas测试</h1>
+    <canvas id="test-canvas" width="400" height="300" style="border: 1px solid #000;"></canvas>
+    
+    <script>
+        console.log("测试页面JavaScript开始执行");
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log("DOM加载完成");
+            
+            const canvas = document.getElementById('test-canvas');
+            if (canvas) {
+                console.log("找到Canvas元素");
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                    console.log("获取到2D上下文");
+                    // 绘制一个简单的红色矩形
+                    ctx.fillStyle = 'red';
+                    ctx.fillRect(50, 50, 100, 75);
+                    console.log("绘制完成");
+                } else {
+                    console.error("无法获取2D上下文");
+                }
+            } else {
+                console.error("未找到Canvas元素");
+            }
+        });
+    </script>
+</body>
+</html>

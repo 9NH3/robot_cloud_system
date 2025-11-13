@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>地图渲染调试页面</title>
+    <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        #map-container {
+            width: 600px;
+            height: 600px;
+            border: 2px solid #333;
+            position: relative;
+            margin: 20px 0;
+        }
+        #map-canvas {
+            width: 100%;
+            height: 100%;
+            background-color: #f0f0f0;
+        }
+        .controls {
+            margin: 20px 0;
+        }
+        button {
+            padding: 10px 15px;
+            margin: 5px;
+            font-size: 16px;
+        }
+        .info {
+            background-color: #e9ecef;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>地图渲染调试页面</h1>
+    
+    <div class="info">
+        <p>此页面用于调试地图渲染功能。请确保以下服务正在运行：</p>
+        <ul>
+            <li>Flask服务器 (python app.py)</li>
+            <li>测试地图发布器 (python test_map_publisher.py)</li>
+        </ul>
+    </div>
+    
+    <div class="controls">
+        <button onclick="connectSocket()">连接WebSocket</button>
+        <button onclick="disconnectSocket()">断开连接</button>
+        <button onclick="generateTestData()">生成测试数据</button>
+        <button onclick="renderMapManually()">手动渲染地图</button>
+    </div>
+    
+    <div>
+        <h3>连接状态: <span id="connection-status">未连接</span></h3>
+        <h3>消息计数: <span id="message-count">0</span></h3>
+    </div>
+    
+    <div id="map-container">
+        <canvas id="map-canvas"></canvas>
+    </div>
+    
+    <div>
+        <h3>日志:</h3>
+        <div id="log" style="height: 200px; overflow-y: scroll; border: 1px solid #ccc; padding: 10px;"></div>
+    </div>
+
+    <script>
+        let socket = null;
+        let messageCount = 0;
+        const canvas = document.getElementById('map-canvas');
+        const ctx = canvas.getContext('2d');
+        let mapData = null;
+        
+        // 调整Canvas大小
+        function resizeCanvas() {
+            const container = canvas.parentElement;
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            logMessage(`Canvas尺寸调整为: ${canvas.width} x ${canvas.height}`);
+        }
+        
+        // 记录日志
+        function logMessage(message) {
+            const logElement = document.getElementById('log');
+            const time = new Date().toLocaleTimeString();
+            logElement.innerHTML += `<div>[${time}] ${message}</div>`;
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+        
+        // 连接WebSocket
+        function connectSocket() {
+            if (socket) {
+                logMessage("WebSocket已经连接");
+                return;
+            }
+            
+            socket = io.connect(window.location.origin);
+            
+            socket.on('connect', () => {
+                document.getElementById('connection-status').textContent = '已连接';
+                logMessage("WebSocket连接成功");
+            });
+            
+            socket.on('disconnect', () => {
+                document.getElementById('connection-status').textContent = '已断开';
+                logMessage("WebSocket连接断开");
+            });
+            
+            socket.on('map_update', (data) => {
+                messageCount++;
+                document.getElementById('message-count').textContent = messageCount;
+                logMessage(`收到地图数据: ${data.info.width} x ${data.info.height}`);
+                mapData = data;
+                renderMap();
+            });
+            
+            logMessage("尝试连接WebSocket...");
+        }
+        
+        // 断开WebSocket连接
+        function disconnectSocket() {
+            if (socket) {
+                socket.disconnect();
+                socket = null;
+                logMessage("WebSocket连接已断开");
+            }
+        }
+        
+        // 生成测试数据
+        function generateTestData() {
+            const testData = {
+                info: {
+                    width: 100,
+                    height: 100,
+                    resolution: 0.05,
+                    origin: {
+                        position: {
+                            x: 0,
+                            y: 0
+                        }
+                    }
+                },
+                data: []
+            };
+            
+            // 生成测试地图数据
+            for (let i = 0; i < 100 * 100; i++) {
+                // 边界设为障碍物
+                const x = i % 100;
+                const y = Math.floor(i / 100);
+                
+                if (x === 0 || x === 99 || y === 0 || y === 99) {
+                    testData.data.push(100); // 障碍物
+                } else if (x > 30 && x < 70 && y > 30 && y < 70) {
+                    testData.data.push(100); // 中心障碍物
+                } else if (Math.random() > 0.7) {
+                    testData.data.push(100); // 随机障碍物
+                } else {
+                    testData.data.push(0); // 自由空间
+                }
+            }
+            
+            mapData = testData;
+            logMessage("生成测试地图数据");
+            renderMap();
+        }
+        
+        // 手动渲染地图
+        function renderMapManually() {
+            if (!mapData) {
+                logMessage("没有地图数据可渲染");
+                return;
+            }
+            renderMap();
+        }
+        
+        // 渲染地图
+        function renderMap() {
+            if (!mapData) {
+                logMessage("没有地图数据可渲染");
+                return;
+            }
+            
+            resizeCanvas();
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            const { info, data } = mapData;
+            const { width, height } = info;
+            
+            logMessage(`开始渲染地图: ${width} x ${height}`);
+            
+            // 创建图像数据
+            const imageData = ctx.createImageData(width, height);
+            const COLOR_MAP = {
+                100: [0, 0, 0, 255],      // 黑色 - 障碍物
+                0: [255, 255, 255, 255],  // 白色 - 空闲区域
+                '-1': [128, 128, 128, 255] // 灰色 - 未知区域
+            };
+            
+            // 填充像素数据
+            for (let i = 0, j = 0; i < data.length; i++, j += 4) {
+                const cellValue = data[i];
+                const color = COLOR_MAP[cellValue] || COLOR_MAP['-1'];
+                
+                imageData.data[j] = color[0];     // R
+                imageData.data[j + 1] = color[1]; // G
+                imageData.data[j + 2] = color[2]; // B
+                imageData.data[j + 3] = color[3]; // A
+            }
+            
+            // 创建临时Canvas来缩放图像
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = width;
+            tempCanvas.height = height;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.putImageData(imageData, 0, 0);
+            
+            // 绘制到主Canvas（保持比例）
+            const scale = Math.min(canvas.width / width, canvas.height / height);
+            const x = (canvas.width - width * scale) / 2;
+            const y = (canvas.height - height * scale) / 2;
+            
+            ctx.drawImage(tempCanvas, x, y, width * scale, height * scale);
+            logMessage("地图渲染完成");
+        }
+        
+        // 页面加载完成后调整Canvas大小
+        window.addEventListener('load', () => {
+            resizeCanvas();
+        });
+        
+        // 窗口大小改变时调整Canvas大小
+        window.addEventListener('resize', () => {
+            resizeCanvas();
+        });
+        
+        logMessage("页面加载完成");
+    </script>
+</body>
+</html>

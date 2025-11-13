@@ -1,0 +1,5 @@
+Flask==2.0.1
+Flask-SocketIO==5.1.1
+rclpy==3.0.0
+sensor_msgs==3.0.0
+geometry_msgs==3.0.0

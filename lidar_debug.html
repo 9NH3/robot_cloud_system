@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>激光雷达调试页面</title>
+    <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
+</head>
+<body>
+    <h1>激光雷达调试页面</h1>
+    <div>
+        <p>连接状态: <span id="status">未连接</span></p>
+        <p>收到数据: <span id="dataCount">0</span></p>
+        <p>最新数据: <span id="latestData">无</span></p>
+        <button onclick="clearData()">清空计数</button>
+    </div>
+    
+    <div>
+        <h2>详细数据</h2>
+        <pre id="detailedData">暂无数据</pre>
+    </div>
+
+    <script>
+        // 连接到WebSocket服务器
+        const socket = io();
+        
+        let dataCount = 0;
+        
+        socket.on('connect', function() {
+            document.getElementById('status').textContent = '已连接';
+            console.log('WebSocket连接成功');
+        });
+        
+        socket.on('disconnect', function() {
+            document.getElementById('status').textContent = '已断开';
+            console.log('WebSocket连接断开');
+        });
+        
+        // 监听激光雷达数据
+        socket.on('lidar_data', function(data) {
+            dataCount++;
+            document.getElementById('dataCount').textContent = dataCount;
+            document.getElementById('latestData').textContent = 
+                `点数: ${data.ranges.length}, 角度范围: ${data.angle_min.toFixed(2)}-${data.angle_max.toFixed(2)}`;
+            
+            // 显示详细数据
+            document.getElementById('detailedData').textContent = JSON.stringify(data, null, 2);
+            
+            console.log('收到激光雷达数据:', data);
+        });
+        
+        // 监听其他事件
+        socket.on('imu_data', function(data) {
+            console.log('收到IMU数据:', data);
+        });
+        
+        socket.on('battery_data', function(data) {
+            console.log('收到电池数据:', data);
+        });
+        
+        function clearData() {
+            dataCount = 0;
+            document.getElementById('dataCount').textContent = '0';
+        }
+    </script>
+</body>
+</html>
