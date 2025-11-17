@@ -228,12 +228,16 @@ class MapNavigation {
         const tempCtx = tempCanvas.getContext('2d');
         tempCtx.putImageData(imageData, 0, 0);
         
-        // 绘制到主Canvas（居中显示）
+        // 绘制到主Canvas（居中显示，上下翻转）
         const scale = Math.min(this.canvas.width / width, this.canvas.height / height);
         const x = (this.canvas.width - width * scale) / 2;
         const y = (this.canvas.height - height * scale) / 2;
         
-        this.ctx.drawImage(tempCanvas, x, y, width * scale, height * scale);
+        this.ctx.save();
+        this.ctx.translate(x, y + height * scale);
+        this.ctx.scale(1, -1);
+        this.ctx.drawImage(tempCanvas, 0, 0, width * scale, height * scale);
+        this.ctx.restore();
         
         // 保存缩放和偏移信息用于坐标转换
         this.state.scale = scale;
@@ -254,10 +258,9 @@ class MapNavigation {
             this.ctx.fillStyle = '#ff0000'; // 红色
             this.ctx.beginPath();
             
-            // 转换世界坐标到Canvas坐标
-            // 正确的转换公式：canvasX = offset.x + (worldX - origin.x) / resolution * scale
+            // 转换世界坐标到Canvas坐标（Y轴水平轴对称）
             const canvasX = offset.x + (this.state.targetPose.x - origin.position.x) / resolution * scale;
-            const canvasY = offset.y + (height - (this.state.targetPose.y - origin.position.y) / resolution) * scale;
+            const canvasY = offset.y + (height * scale - ((this.state.targetPose.y - origin.position.y) / resolution) * scale);
             
             this.ctx.arc(canvasX, canvasY, 8, 0, 2 * Math.PI);
             this.ctx.fill();
@@ -270,9 +273,9 @@ class MapNavigation {
             this.ctx.fillStyle = '#00ff00'; // 绿色
             this.ctx.beginPath();
             
-            // 转换世界坐标到Canvas坐标
+            // 转换世界坐标到Canvas坐标（Y轴水平轴对称）
             const canvasX = offset.x + (this.state.currentPose.x - origin.position.x) / resolution * scale;
-            const canvasY = offset.y + (height - (this.state.currentPose.y - origin.position.y) / resolution) * scale;
+            const canvasY = offset.y + (height * scale - ((this.state.currentPose.y - origin.position.y) / resolution) * scale);
             
             this.ctx.arc(canvasX, canvasY, 6, 0, 2 * Math.PI);
             this.ctx.fill();
