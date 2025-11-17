@@ -66,6 +66,77 @@ python test_navigation_server.py
 
 在浏览器中访问 `http://localhost:5000`，切换到"地图与导航"标签页，输入目标点坐标并点击"设置目标点"按钮即可开始导航。
 
+### 5. 使用任务管理系统
+
+任务管理系统允许您创建、管理和跟踪机器人任务。
+
+#### 初始化任务数据库
+
+首次使用任务管理系统前，需要初始化数据库：
+
+```bash
+python3 init_tasks_db.py
+```
+
+#### 访问任务管理界面
+
+有两种方式访问任务管理界面：
+
+1. 通过主界面：打开 `http://localhost:5000`，点击顶部导航栏的"任务管理"标签
+2. 独立页面：直接访问 `http://localhost:5000/tasks`
+
+#### 任务类型
+
+目前支持以下任务类型：
+- **导航任务**：指定坐标点进行导航
+- **巡检任务**：按指定路线进行巡检
+- **数据采集**：收集传感器数据
+- **充电任务**：自动返回充电站
+- **维护任务**：执行系统维护操作
+
+#### 任务状态
+
+任务具有以下状态：
+- **待处理 (pending)**：任务已创建，等待执行
+- **进行中 (in_progress)**：任务正在执行
+- **已暂停 (paused)**：任务被暂停
+- **已完成 (completed)**：任务成功完成
+- **已失败 (failed)**：任务执行失败
+- **已取消 (cancelled)**：任务被取消
+
+## 版本控制和代码分享
+
+### .gitignore 文件
+
+项目包含一个 [.gitignore](file:///home/yahboom/Desktop/robot_cloud_system/.gitignore) 文件，用于防止将本地生成的文件提交到版本控制系统中。这些文件包括：
+
+- 数据库文件 (`tasks.db`)
+- Python 编译文件和缓存
+- 日志文件
+- IDE 配置文件
+- 操作系统生成的文件
+
+### 清理本地文件
+
+项目提供了一个清理脚本 [cleanup_local_files.sh](file:///home/yahboom/Desktop/robot_cloud_system/cleanup_local_files.sh)，用于清除本地生成的数据库文件，以便在分享代码时保持代码库的干净。
+
+运行清理脚本：
+
+```bash
+./cleanup_local_files.sh
+```
+
+或者在 Windows 系统上：
+
+```bash
+bash cleanup_local_files.sh
+```
+
+该脚本会删除以下文件：
+- 数据库文件 (`tasks.db`)
+
+注意：该脚本仅删除数据库文件，不会删除任何源代码或配置文件。
+
 ## 地图数据流程说明
 
 地图数据从产生到在Web端显示的完整流程如下：
@@ -160,10 +231,17 @@ Web界面 → WebSocket服务器 → ROS 2 Action客户端 → 导航服务器
 ```
 robot_cloud_system/
 ├── app.py                 # 主应用文件
+├── init_tasks_db.py       # 任务管理数据库初始化脚本
+├── task_state_machine.py  # 任务状态机实现
+├── tasks_api.py           # 任务管理API接口
+├── task_executor.py       # 任务执行器（计划中）
 ├── test_map_publisher.py   # 测试地图发布器
 ├── test_navigation_server.py # 测试导航服务器
+├── cleanup_local_files.sh # 清理本地数据库文件脚本
+├── .gitignore             # Git忽略文件配置
 ├── templates/
-│   └── index.html         # 主页面模板
+│   ├── index.html         # 主页面模板
+│   └── tasks.html         # 任务管理页面
 ├── static/
 │   └── js/
 │       ├── map_navigation.js      # 主界面地图导航系统
@@ -179,6 +257,7 @@ robot_cloud_system/
 
 - `http://localhost:5000/map_debug` - 地图渲染调试页面
 - `http://localhost:5000/test_websocket` - WebSocket连接测试页面
+- `http://localhost:5000/tasks` - 任务管理系统独立页面
 
 ## 常见问题
 
@@ -199,7 +278,12 @@ robot_cloud_system/
 - 确保 `test_navigation_server.py` 正在运行（用于测试）或ROS导航系统正在运行
 - 检查浏览器控制台是否有JavaScript错误
 - 确认WebSocket连接是否正常
-- 查看后端日志确认导航目标是否正确接收
+
+### 4. 任务管理系统无法使用
+
+- 确保已运行 `init_tasks_db.py` 初始化数据库
+- 检查 `tasks.db` 文件是否存在
+- 查看后端日志确认API接口是否正常工作
 
 ## 扩展开发
 
@@ -213,6 +297,22 @@ robot_cloud_system/
 - `app.py` - 后端导航Action客户端实现
 - `test_navigation_server.py` - 导航服务器实现和路径规划算法
 - `static/js/map_navigation.js` - 前端导航交互实现
+
+如需扩展任务管理系统，可参考以下文件：
+- `init_tasks_db.py` - 数据库初始化脚本
+- `task_state_machine.py` - 任务状态机实现
+- `tasks_api.py` - RESTful API接口
+- `templates/tasks.html` - 前端界面实现
+
+## 任务执行说明
+
+目前任务管理系统已完成以下功能：
+1. 任务创建和管理
+2. 任务状态跟踪
+3. 用户友好的参数输入界面
+4. RESTful API接口
+
+任务执行功能（将任务与机器人实际控制连接）正在开发中。未来将通过任务执行器连接任务管理系统与机器人控制逻辑，实现任务的自动执行。
 
 ## 许可证
 

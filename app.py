@@ -19,10 +19,16 @@ except ImportError as e:
     print(f"导航模块导入失败: {e}")
     NAVIGATION_AVAILABLE = False
 
+# 导入任务管理模块
+from tasks_api import tasks_bp
+
 # 创建Flask应用
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key_here'
 socketio = SocketIO(app, cors_allowed_origins="*")
+
+# 注册任务管理API蓝图
+app.register_blueprint(tasks_bp, url_prefix='/api')
 
 # 创建ROS 2节点类
 class WebNode(Node):
@@ -359,6 +365,10 @@ def handle_set_navigation_goal(data):
 @app.route('/')
 def index():
     return render_template('index.html')
+
+@app.route('/tasks')
+def tasks():
+    return render_template('tasks.html')
 
 @app.route('/lidar_debug')
 def lidar_debug():
